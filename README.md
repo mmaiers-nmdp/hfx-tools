@@ -43,6 +43,7 @@ Assuming your metatdata.json contains
 
 ## package contents
 
+```
 .
 ├── __init__.py
 ├── cli.py
@@ -52,4 +53,5 @@ Assuming your metatdata.json contains
 ├── pack.py
 ├── qc.py
 └── util.py
+```
 
