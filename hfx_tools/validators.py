@@ -34,6 +34,7 @@ class ValidationFramework:
     
     def _register_builtin_validators(self) -> None:
         """Register built-in validators."""
+        self.register_validator("schema_version", validate_schema_version)
         self.register_validator("metadata_required_fields", validate_metadata_required_fields)
         self.register_validator("frequency_location", validate_frequency_location)
         self.register_validator("frequency_data_format", validate_frequency_data_format)
@@ -88,13 +89,48 @@ class ValidationFramework:
 
 # Built-in validators
 
+HFX_SCHEMA_VERSION = "0.1.0"
+
+
+def validate_schema_version(metadata_json: Path, hfx_obj: Dict[str, Any],
+                            data_folder: Path) -> ValidationResult:
+    """Check that top-level version matches the expected HFX schema version."""
+    version = hfx_obj.get("version")
+    if version is None:
+        return ValidationResult(
+            validator_name="schema_version",
+            passed=False,
+            message=f"Missing required top-level 'version' field (expected '{HFX_SCHEMA_VERSION}')",
+            level="error"
+        )
+    if version != HFX_SCHEMA_VERSION:
+        return ValidationResult(
+            validator_name="schema_version",
+            passed=False,
+            message=f"Version mismatch: found '{version}', expected '{HFX_SCHEMA_VERSION}'",
+            level="error"
+        )
+    return ValidationResult(
+        validator_name="schema_version",
+        passed=True,
+        message=f"Schema version OK: {version}",
+        level="info"
+    )
+
+
 def validate_metadata_required_fields(metadata_json: Path, hfx_obj: Dict[str, Any],
                                       data_folder: Path) -> List[ValidationResult]:
-    """Check that required metadata fields are present."""
+    """Check that required metadata fields are present per HFX schema."""
     results = []
     metadata = hfx_obj.get("metadata", {})
-    
-    required_fields = ["frequencyLocation"]
+
+    required_fields = [
+        "outputResolution",
+        "hfeMethod",
+        "cohortDescription",
+        "nomenclatureUsed",
+        "frequencyLocation",
+    ]
     for field in required_fields:
         if field not in metadata:
             results.append(ValidationResult(
@@ -103,7 +139,7 @@ def validate_metadata_required_fields(metadata_json: Path, hfx_obj: Dict[str, An
                 message=f"Missing required field: metadata.{field}",
                 level="error"
             ))
-    
+
     if not results:
         results.append(ValidationResult(
             validator_name="metadata_required_fields",
@@ -111,7 +147,7 @@ def validate_metadata_required_fields(metadata_json: Path, hfx_obj: Dict[str, An
             message="All required metadata fields present",
             level="info"
         ))
-    
+
     return results
 
 

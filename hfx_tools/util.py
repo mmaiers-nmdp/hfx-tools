@@ -43,6 +43,7 @@ def flatten_index_row(hfx: Dict[str, Any], qc: Dict[str, Any]) -> Dict[str, Any]
 
     return {
         # minimal phycus index fields (extend as you like)
+        "version": hfx.get("version"),
         "creationDateTime": md.get("creationDateTime"),
         "species": cohort.get("species"),
         "cohortSize": cohort.get("cohortSize"),
@@ -55,7 +56,9 @@ def flatten_index_row(hfx: Dict[str, Any], qc: Dict[str, Any]) -> Dict[str, Any]
         "nomenclatureVersion": nomen.get("version"),
         "hfeMethod": hfe.get("method"),
         "frequencyLocation": md.get("frequencyLocation"),
+        "frequencyFileHeader": md.get("frequencyFileHeader"),
         "checkSum": md.get("checkSum"),
+        "license": md.get("license"),
         # QC fields
         **{f"qc_{k}": v for k, v in qc.items() if k != "warnings"},
         "qc_warnings": qc.get("warnings", []),

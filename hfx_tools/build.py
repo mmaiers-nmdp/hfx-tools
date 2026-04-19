@@ -92,6 +92,16 @@ def build_hfx_from_folder(
     
     # Load and validate
     hfx_obj = read_hfx_json(metadata_json)
+
+    # Ensure top-level version is set per schema
+    if "version" not in hfx_obj:
+        hfx_obj["version"] = "0.1.0"
+        logger.info("Added missing top-level version: 0.1.0")
+
+    # Ensure metadata wrapper exists
+    if "metadata" not in hfx_obj:
+        hfx_obj["metadata"] = {}
+        logger.warning("Added missing metadata wrapper")
     
     # Auto-detect and update frequency location if data files exist
     if auto_update_frequency_location and data_folder.exists():
@@ -109,6 +119,8 @@ def build_hfx_from_folder(
                 new_loc = f"file://data/{data_file.name}"
                 logger.info(f"Auto-updating frequencyLocation from '{old_loc}' to '{new_loc}'")
                 hfx_obj["metadata"]["frequencyLocation"] = new_loc
+                # Write updated metadata back to file so pack_hfx reads it
+                write_hfx_json(metadata_json, hfx_obj)
     
     # Run validation
     validator = ValidationFramework()

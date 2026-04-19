@@ -1,4 +1,5 @@
 {
+  "version": "0.1.0",
   "metadata": {
     "outputResolution": [
       {
@@ -60,7 +61,11 @@
         "year": "2007"
       }
     },
-    "frequencyLocation": "file://HEGL_CAU.csv",
+    "frequencyLocation": "file://data/HEGL_AFA.csv",
+    "frequencyFileHeader": {
+      "Haplo": "haplotype",
+      "Freq": "frequency"
+    },
     "checkSum": "aaa61c62fbaa2de9d5f6064d2b635e5c"
   }
 }
