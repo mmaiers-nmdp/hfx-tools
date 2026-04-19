@@ -91,11 +91,10 @@ def qc_hfx(metadata_json: Path, write_metadata: bool, index_row: bool, topk: Lis
         md["checkSum"] = md5_hex(freq_file)
 
     if write_metadata:
-        # Add QC under metadata.qc (schema currently disallows extra props under metadata,
-        # but this is your internal convention for phycus; phycus index can consume it even
-        # if submissions keep QC elsewhere.)
-        md["qc"] = qc
-        hfx["metadata"] = md
+        # Store QC at top-level (not under metadata, which has additionalProperties: false)
+        hfx["qc"] = qc
+        # Note: top-level additionalProperties is also false in strict schema mode,
+        # but qc output is a local convenience file, not a submission document.
         write_hfx_json(metadata_json, hfx)
 
     if index_row:

@@ -9,6 +9,7 @@ from .io import read_hfx_json
 
 
 def _print_summary(hfx: Dict[str, Any], label: str) -> None:
+    version = hfx.get("version", "(missing)")
     md = hfx.get("metadata", {})
     cohort = md.get("cohortDescription", {}) or {}
     pops = cohort.get("population", []) or []
@@ -18,7 +19,10 @@ def _print_summary(hfx: Dict[str, Any], label: str) -> None:
     loci = [x.get("locus") for x in out_res if isinstance(x, dict) and x.get("locus")]
 
     print(f"== {label} ==")
+    print(f"version: {version}")
     print(f"frequencyLocation: {md.get('frequencyLocation')}")
+    if md.get("frequencyFileHeader"):
+        print(f"frequencyFileHeader: {md.get('frequencyFileHeader')}")
     print(f"checkSum (md5): {md.get('checkSum')}")
     print(f"species: {cohort.get('species')}")
     print(f"cohortSize: {cohort.get('cohortSize')}")
@@ -26,6 +30,8 @@ def _print_summary(hfx: Dict[str, Any], label: str) -> None:
     print(f"loci: {loci}")
     print(f"nomenclature: {md.get('nomenclatureUsed')}")
     print(f"hfeMethod: {md.get('hfeMethod')}")
+    if md.get("license"):
+        print(f"license: {md.get('license')}")
 
 
 def inspect_any(path: Path) -> None:

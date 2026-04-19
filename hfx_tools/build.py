@@ -92,6 +92,16 @@ def build_hfx_from_folder(
     
     # Load and validate
     hfx_obj = read_hfx_json(metadata_json)
+
+    # Ensure top-level version is set per schema
+    if "version" not in hfx_obj:
+        hfx_obj["version"] = "0.1.0"
+        logger.info("Added missing top-level version: 0.1.0")
+
+    # Ensure metadata wrapper exists
+    if "metadata" not in hfx_obj:
+        hfx_obj["metadata"] = {}
+        logger.warning("Added missing metadata wrapper")
     
     # Auto-detect and update frequency location if data files exist
     if auto_update_frequency_location and data_folder.exists():

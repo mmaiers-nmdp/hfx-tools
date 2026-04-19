@@ -18,6 +18,9 @@ def pack_hfx(
     hash_alg: Optional[str] = None,
 ) -> None:
     hfx = read_hfx_json(metadata_json)
+    # Ensure top-level version per schema
+    if "version" not in hfx:
+        hfx["version"] = "0.1.0"
     md = hfx.get("metadata", {})
     if "frequencyLocation" not in md:
         raise ValueError("metadata.frequencyLocation is required")

@@ -144,6 +144,57 @@ Options:
 - `--hash {md5,sha256,none}` - Hash algorithm (default: sha256)
 - `--no-auto-update-location` - Don't auto-update `metadata.frequencyLocation` (advanced)
 
+### CLI: Build with multiple populations
+
+For submissions with multiple populations, use a flat naming scheme with a `POPULATIONS.json` manifest. This keeps the structure identical whether you have 1 or many populations:
+
+```
+input_folder/
+├── metadata/
+│   ├── pop1_metadata.json
+│   ├── pop2_metadata.json
+│   └── pop3_metadata.json
+├── data/
+│   ├── pop1_frequencies.csv
+│   ├── pop2_frequencies.csv
+│   └── pop3_frequencies.csv
+└── POPULATIONS.json
+```
+
+**POPULATIONS.json structure:**
+```json
+{
+  "populations": [
+    {
+      "id": "pop1",
+      "name": "Population 1",
+      "metadataFile": "pop1_metadata.json",
+      "frequencyFile": "pop1_frequencies.csv"
+    },
+    {
+      "id": "pop2",
+      "name": "Population 2",
+      "metadataFile": "pop2_metadata.json",
+      "frequencyFile": "pop2_frequencies.csv"
+    }
+  ]
+}
+```
+
+**Build command:**
+```bash
+hfx-build input_folder -n multi_population_submission
+# Generates: multi_population_submission.hfx (with POPULATIONS.json manifest)
+```
+
+The build process will:
+1. Read `POPULATIONS.json` to discover all populations
+2. Load each population's metadata and frequency data
+3. Validate each population independently
+4. Pack all into a single `.hfx` archive with the manifest
+
+**Note:** Using the flat naming scheme (`pop*_metadata.json`, `pop*_frequencies.csv`) allows for consistent file structure whether you have a single population or many. Even single-population submissions can use this pattern for consistency.
+
 ### CLI: Pack (low-level)
 
 For direct packing when you already have a metadata.json:
@@ -256,7 +307,57 @@ For small datasets, embed frequencies directly in JSON:
 }
 ```
 
-### Scenario 4: Programmatic use in Python
+### Scenario 4: Multiple populations in one submission
+
+Combine data from multiple populations into a single HFX file:
+
+```bash
+# Folder structure
+submission/
+├── metadata/
+│   ├── european_metadata.json
+│   ├── asian_metadata.json
+│   └── african_metadata.json
+├── data/
+│   ├── european_frequencies.csv
+│   ├── asian_frequencies.csv
+│   └── african_frequencies.csv
+└── POPULATIONS.json
+```
+
+**POPULATIONS.json:**
+```json
+{
+  "populations": [
+    {
+      "id": "european",
+      "name": "European Population",
+      "metadataFile": "european_metadata.json",
+      "frequencyFile": "european_frequencies.csv"
+    },
+    {
+      "id": "asian",
+      "name": "Asian Population",
+      "metadataFile": "asian_metadata.json",
+      "frequencyFile": "asian_frequencies.csv"
+    },
+    {
+      "id": "african",
+      "name": "African Population",
+      "metadataFile": "african_metadata.json",
+      "frequencyFile": "african_frequencies.csv"
+    }
+  ]
+}
+```
+
+**Build:**
+```bash
+hfx-build submission -n global_study
+# Output: global_study.hfx (contains all 3 populations)
+```
+
+### Scenario 5: Programmatic use in Python
 
 ```python
 from hfx_tools.build import build
@@ -432,6 +533,40 @@ my_data/
 ```bash
 mkdir -p ~/.hfx-tools
 make sync VENV=~/.hfx-tools/.venv
+```
+
+### Issue: POPULATIONS.json not recognized
+
+**Cause**: File is missing, malformed, or in the wrong location.
+
+**Solution**: Ensure `POPULATIONS.json` is at the root of input folder (same level as `metadata/` and `data/`):
+```
+input_folder/
+├── POPULATIONS.json         # ← Must be here
+├── metadata/
+└── data/
+```
+
+Validate JSON syntax:
+```bash
+python -m json.tool input_folder/POPULATIONS.json
+```
+
+### Issue: Population metadata mismatch
+
+**Cause**: `POPULATIONS.json` references files that don't exist in `metadata/` or `data/`.
+
+**Solution**: Check that filenames match exactly:
+```json
+{
+  "populations": [
+    {
+      "id": "pop1",
+      "metadataFile": "pop1_metadata.json",    # ← Must exist in metadata/
+      "frequencyFile": "pop1_frequencies.csv"  # ← Must exist in data/
+    }
+  ]
+}
 ```
 
 ## Resources
