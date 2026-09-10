@@ -3,19 +3,20 @@
 Tools for working with HFX submissions (Haplotype Frequency Exchange).
 
 This repo provides composable command line tools and a Streamlit app for building, packing,
-inspecting, and validating HFX documents, implementing the [HFX specification](https://github.com/nmdp-bioinformatics/hfx). Key features include:
+inspecting, and validating HFX documents, implementing the [HFX specification](https://github.com/societyforimmunepolymorphism/hfx). Key features include:
 
 - **`build`** - Build HFX bundles from a folder with automatic validation
 - **`pack`** - Pack HFX archives from metadata.json with optional manifests and checksums
 - **`qc`** - Compute quality control statistics
 - **`inspect`** - Inspect metadata or bundled HFX files
+- **`reduce-loci`** - Project an HFX onto a subset of loci by marginalizing out omitted loci
 - **Validation framework** - Extensible validation with built-in validators
 - **Streamlit UI** - Web-based interface for building HFX files
 
 ## Key schema facts
 
 - `metadata.frequencyLocation` controls where frequencies are stored: either `"inline"`
-  or a URI (e.g., `file://frequencies.csv`) (see [HFX specification](https://github.com/nmdp-bioinformatics/hfx)).
+  or a URI (e.g., `file://frequencies.csv`) (see [HFX specification](https://github.com/societyforimmunepolymorphism/hfx)).
 
 - If inline, the JSON may include `frequencyData` (array of `{haplotype, frequency}`).
 
@@ -25,22 +26,19 @@ inspecting, and validating HFX documents, implementing the [HFX specification](h
 ## Install
 
 ### Basic installation
+
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -e .
+pip install hfx-tools
 ```
 
 ### With optional dependencies
+
 ```bash
 # For Parquet support
-pip install -e ".[parquet]"
+pip install "hfx-tools[parquet]"
 
 # For Streamlit web UI
-pip install -e ".[streamlit]"
-
-# For development
-pip install -e ".[dev,lint]"
+pip install "hfx-tools[streamlit]"
 ```
 
 ## Quick Start
@@ -63,7 +61,7 @@ cat my_submission/my_hfx_file.build.log
 
 For a guided interactive experience, launch the Streamlit web UI:
 ```bash
-streamlit run hfx_tools/streamlit_app.py
+streamlit run "$(python -c 'import hfx_tools.streamlit_app as app; print(app.__file__)')"
 ```
 
 ## Architecture
@@ -163,12 +161,82 @@ hfx-tools inspect example.hfx   # Equivalent generic command
 hfx-qc metadata.json --write-metadata --topk 10 100 1000
 ```
 
+### CLI: Reduce loci (marginalization)
+
+Project a multilocus HFX onto a subset of loci. Omitted loci are
+**marginalized out**: the frequency of each reduced haplotype is the **sum** of
+the frequencies of all source haplotypes that map to the same reduced
+haplotype.
+
+```bash
+hfx-tools reduce-loci nine_locus.hfx \
+    --loci A B DRB1 DQB1 \
+    -o four_locus.hfx
+
+# standalone convenience command (equivalent):
+hfx-reduce-loci nine_locus.hfx --loci A B DRB1 DQB1 -o four_locus.hfx
+```
+
+For example, two nine-locus haplotypes that differ only at omitted loci collapse
+into one four-locus haplotype whose frequency is the sum:
+
+```
+A*01:01~C*07:01~B*08:01~DRB1*03:01~DQB1*02:01   0.040
+A*01:01~C*07:02~B*08:01~DRB1*03:01~DQB1*02:01   0.025
+```
+
+reduced with `--loci A B DRB1 DQB1` becomes:
+
+```
+A*01:01~B*08:01~DRB1*03:01~DQB1*02:01           0.065
+```
+
+Key properties:
+
+- **Arbitrary reductions** - any subset of the source loci is supported
+  (9→8, 9→6, 9→4, 6→3, 4→2, ...). Requesting the full source locus set is a
+  scientific no-op (a new bundle is still produced).
+- **Locus order** - the output haplotypes follow the order given in `--loci`.
+- **Frequency conservation** - total frequency is preserved and checked; the
+  build fails if the input and output sums differ by more than `--tolerance`
+  (default `1e-6`). Frequencies are **not** renormalized.
+- **Storage style preserved** - CSV→CSV, Parquet→Parquet, inline→inline. There
+  is no silent conversion between storage styles, and non-standard column
+  headers declared via `metadata.frequencyFileHeader` are preserved.
+- **Metadata & provenance** - cohort, nomenclature, methodology, producer,
+  license, and header mappings are preserved. `metadata.outputResolution` is
+  restricted to the selected loci, and the projection is recorded in
+  `metadata.hfeMethod.parameters` (the schema provides no dedicated provenance
+  field, and forbids additional properties).
+- **Fresh manifests** - the new bundle gets newly generated `MANIFEST.json` and
+  checksums describing the reduced files.
+
+Options:
+- `--loci LOCUS [LOCUS ...]` - loci to retain, in output order (required)
+- `-o, --out PATH` - output `.hfx` path (required)
+- `--no-manifest` - skip `MANIFEST.json`
+- `--hash {md5,sha256,none}` - checksum algorithm (default: sha256)
+- `--tolerance FLOAT` - max allowed deviation between input/output total frequency
+
+Programmatic use:
+
+```python
+from hfx_tools.reduce import reduce_loci_hfx
+
+result = reduce_loci_hfx("nine_locus.hfx", ["A", "B", "DRB1", "DQB1"], "four_locus.hfx")
+print(result["n_input_haplotypes"], "->", result["n_output_haplotypes"])
+print("freq conservation error:", result["frequency_conservation_error"])
+```
+
+The projection math is also available as pure, I/O-free functions
+(`hfx_tools.reduce.project_haplotype`, `reduce_frequency_rows`) for direct reuse.
+
 ### Streamlit: Web UI
 
 Launch the interactive web interface:
 
 ```bash
-streamlit run hfx_tools/streamlit_app.py
+streamlit run "$(python -c 'import hfx_tools.streamlit_app as app; print(app.__file__)')"
 ```
 
 The Streamlit app provides:
@@ -223,13 +291,15 @@ error-level validations fail.
 ```python
 from hfx_tools.validators import ValidationFramework, ValidationResult
 
+
 def my_custom_validator(metadata_json, hfx_obj, data_folder):
     return ValidationResult(
         validator_name="my_validator",
         passed=True,
         message="My validation passed",
-        level="info"  # or "warning", "error"
+        level="info",  # or "warning", "error"
     )
+
 
 validator_framework = ValidationFramework()
 validator_framework.register_validator("my_validator", my_custom_validator)
@@ -310,6 +380,7 @@ from hfx_tools.validators import ValidationFramework, ValidationResult
 
 validator = ValidationFramework()
 
+
 def check_cohort_size(metadata_json, hfx_obj, data_folder):
     size = hfx_obj.get("metadata", {}).get("cohortDescription", {}).get("cohortSize", 0)
     if size < 100:
@@ -317,14 +388,12 @@ def check_cohort_size(metadata_json, hfx_obj, data_folder):
             validator_name="cohort_size",
             passed=False,
             message=f"Cohort too small: {size} < 100",
-            level="warning"
+            level="warning",
         )
     return ValidationResult(
-        validator_name="cohort_size",
-        passed=True,
-        message=f"Cohort size OK: {size}",
-        level="info"
+        validator_name="cohort_size", passed=True, message=f"Cohort size OK: {size}", level="info"
     )
+
 
 validator.register_validator("cohort_size", check_cohort_size)
 results = validator.validate(metadata_path, hfx_obj, data_folder)
@@ -341,6 +410,7 @@ hfx_tools/
 ├── io.py              # JSON and file I/O
 ├── pack.py            # Low-level packing
 ├── qc.py              # Quality control
+├── reduce.py          # Locus reduction (marginalization / projection)
 ├── streamlit_app.py   # Web UI
 ├── util.py            # Utilities
 └── validators.py      # Validation framework
@@ -351,9 +421,12 @@ hfx_tools/
 ### Development setup
 
 ```bash
-git clone https://github.com/nmdp-bioinformatics/hfx-tools
+git clone https://github.com/societyforimmunepolymorphism/hfx-tools
 cd hfx-tools
-make sync EXTRAS="dev,lint"
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --editable .
+python -m pip install pytest ruff build
 ```
 
 ### Running tests and linting
@@ -429,7 +502,7 @@ make sync VENV=~/.hfx-tools/.venv
 
 ## Resources
 
-- [HFX Specification](https://github.com/nmdp-bioinformatics/hfx) - Authoritative format specification and schema
+- [HFX Specification](https://github.com/societyforimmunepolymorphism/hfx) - Authoritative format specification and schema
 - [phycus](https://github.com/nmdp-bioinformatics/phycus) - Related NMDP bioinformatics tools
-- [Issues & Discussions](https://github.com/nmdp-bioinformatics/hfx-tools/issues) - Report bugs or suggest features
-- [HFX Spec Issues](https://github.com/nmdp-bioinformatics/hfx/issues) - Discuss spec-related questions
+- [Issues & Discussions](https://github.com/societyforimmunepolymorphism/hfx-tools/issues) - Report bugs or suggest features
+- [HFX Spec Issues](https://github.com/societyforimmunepolymorphism/hfx/issues) - Discuss spec-related questions
